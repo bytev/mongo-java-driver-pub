@@ -41,6 +41,7 @@ import java.util.function.Function;
 
 import static java.nio.file.Files.isDirectory;
 import static java.util.stream.Collectors.toMap;
+import static org.bson.assertions.Assertions.assertNotNull;
 
 public final class JsonPoweredTestHelper {
 
@@ -87,7 +88,11 @@ public final class JsonPoweredTestHelper {
 
     public static List<File> getTestFiles(final String resourcePath) throws URISyntaxException {
         List<File> files = new ArrayList<>();
-        addFilesFromDirectory(new File(JsonPoweredTestHelper.class.getResource(resourcePath).toURI()), files);
+
+        URL resource = JsonPoweredTestHelper.class.getResource(resourcePath);
+        File directory = new File(assertNotNull(resource).toExternalForm());
+        addFilesFromDirectory(directory, files);
+
         return files;
     }
 
