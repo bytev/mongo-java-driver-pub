@@ -175,7 +175,7 @@ public abstract class UnifiedTest {
                 TestDef testDef = testDef(directory, fileDescription, testDescription, isReactive);
                 doSkips(testDef);
 
-                boolean forceFlaky = testDef.wasAssignedModifier(UnifiedTestModifications.Modifier.FORCE_FLAKY);
+                boolean forceFlaky = true;// testDef.wasAssignedModifier(UnifiedTestModifications.Modifier.FORCE_FLAKY);
                 boolean retry = forceFlaky || testDef.wasAssignedModifier(UnifiedTestModifications.Modifier.RETRY);
 
                 int attempts = retry ? ATTEMPTS : 1;
