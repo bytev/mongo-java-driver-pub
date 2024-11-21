@@ -18,7 +18,6 @@ package com.mongodb.client.unified;
 
 import com.mongodb.assertions.Assertions;
 import com.mongodb.lang.NonNull;
-import com.mongodb.lang.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,14 +29,22 @@ import static com.mongodb.ClusterFixture.isDiscoverableReplicaSet;
 import static com.mongodb.ClusterFixture.isServerlessTest;
 import static com.mongodb.ClusterFixture.isSharded;
 import static com.mongodb.ClusterFixture.serverVersionLessThan;
+import static com.mongodb.client.unified.UnifiedTestModifications.Modifier.FORCE_FLAKY;
 import static com.mongodb.client.unified.UnifiedTestModifications.Modifier.IGNORE_EXTRA_EVENTS;
 import static com.mongodb.client.unified.UnifiedTestModifications.Modifier.SLEEP_AFTER_CURSOR_CLOSE;
 import static com.mongodb.client.unified.UnifiedTestModifications.Modifier.SLEEP_AFTER_CURSOR_OPEN;
 import static com.mongodb.client.unified.UnifiedTestModifications.Modifier.WAIT_FOR_BATCH_CURSOR_CREATION;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 public final class UnifiedTestModifications {
     public static void doSkips(final TestDef def) {
+
+        // TODO reasons for retry
+        def.modify(FORCE_FLAKY)
+                // Exception in encryption library: ChangeCipherSpec message sequence violation
+                .test("client-side-encryption","namedKMS-createDataKey","create datakey with named KMIP KMS provider")
+                // Number of checked out connections must match expected
+                .test("load-balancers", "cursors are correctly pinned to connections for load-balanced clusters", "pinned connections are returned after a network error during a killCursors request")
+                .test("client-side-encryption", "namedKMS-rewrapManyDataKey", "rewrap to kmip:name1");
 
         // atlas-data-lake
 
@@ -90,7 +97,7 @@ public final class UnifiedTestModifications {
         // added as part of https://jira.mongodb.org/browse/JAVA-4976 , but unknown Jira to complete
         // The implementation of the functionality related to clearing the connection pool before closing the connection
         // will be carried out once the specification is finalized and ready.
-        def.skipTodo("")
+        def.skipUnknownReason("")
                 .test("connection-monitoring-and-pooling/logging", "connection-logging", "Connection checkout fails due to error establishing connection");
 
         // load-balancers
@@ -129,7 +136,7 @@ public final class UnifiedTestModifications {
                 .test("crud", "count", "Deprecated count without a filter")
                 .test("crud", "count", "Deprecated count with a filter")
                 .test("crud", "count", "Deprecated count with skip and limit");
-        def.skipTodo("See downstream changes comment on https://jira.mongodb.org/browse/JAVA-4275")
+        def.skipUnknownReason("See downstream changes comment on https://jira.mongodb.org/browse/JAVA-4275")
                 .test("crud", "findOneAndReplace-hint-unacknowledged", "Unacknowledged findOneAndReplace with hint string on 4.4+ server")
                 .test("crud", "findOneAndReplace-hint-unacknowledged", "Unacknowledged findOneAndReplace with hint document on 4.4+ server")
                 .test("crud", "findOneAndUpdate-hint-unacknowledged", "Unacknowledged findOneAndUpdate with hint string on 4.4+ server")
@@ -292,54 +299,54 @@ public final class UnifiedTestModifications {
          * Test is skipped because it is pending implementation, and there is
          * a Jira ticket tracking this which has more information.
          *
-         * @param skip reason for skipping the test; must start with a Jira URL
+         * @param ticket reason for skipping the test; must start with a Jira URL
          */
-        public TestApplicator skipJira(final String skip) {
-            Assertions.assertTrue(skip.startsWith("https://jira.mongodb.org/browse/JAVA-"));
-            return new TestApplicator(this, skip);
+        public TestApplicator skipJira(final String ticket) {
+            Assertions.assertTrue(ticket.startsWith("https://jira.mongodb.org/browse/JAVA-"));
+            return new TestApplicator(this, ticket);
         }
 
         /**
          * Test is skipped because the feature under test was deprecated, and
          * was removed in the Java driver.
          *
-         * @param skip reason for skipping the test
+         * @param reason reason for skipping the test
          */
-        public TestApplicator skipDeprecated(final String skip) {
-            return new TestApplicator(this, skip);
+        public TestApplicator skipDeprecated(final String reason) {
+            return new TestApplicator(this, reason);
         }
 
         /**
          * Test is skipped because the Java driver cannot comply with the spec.
          *
-         * @param skip reason for skipping the test
+         * @param reason reason for skipping the test
          */
-        public TestApplicator skipNoncompliant(final String skip) {
-            return new TestApplicator(this, skip);
+        public TestApplicator skipNoncompliant(final String reason) {
+            return new TestApplicator(this, reason);
         }
 
         /**
          * Test is skipped because the Java Reactive driver cannot comply with the spec.
          *
-         * @param skip reason for skipping the test
+         * @param reason reason for skipping the test
          */
-        public TestApplicator skipNoncompliantReactive(final String skip) {
-            return new TestApplicator(this, skip);
+        public TestApplicator skipNoncompliantReactive(final String reason) {
+            return new TestApplicator(this, reason);
         }
 
         /**
          * The test is skipped, as specified. This should be paired with a
          * "when" clause.
          */
-        public TestApplicator skipAccordingToSpec(final String skip) {
-            return new TestApplicator(this, skip);
+        public TestApplicator skipAccordingToSpec(final String reason) {
+            return new TestApplicator(this, reason);
         }
 
         /**
          * The test is skipped for an unknown reason.
          */
-        public TestApplicator skipTodo(final String skip) {
-            return new TestApplicator(this, skip);
+        public TestApplicator skipUnknownReason(final String reason) {
+            return new TestApplicator(this, reason);
         }
 
         public TestApplicator modify(final Modifier... modifiers) {
@@ -360,10 +367,6 @@ public final class UnifiedTestModifications {
      */
     public static final class TestApplicator {
         private final TestDef testDef;
-
-        private final boolean shouldSkip;
-        @Nullable
-        private final String reasonToApply;
         private final List<Modifier> modifiersToApply;
         private Supplier<Boolean> precondition;
         private boolean matchWasPerformed = false;
@@ -372,19 +375,15 @@ public final class UnifiedTestModifications {
                 final TestDef testDef,
                 final List<Modifier> modifiersToApply) {
             this.testDef = testDef;
-            this.shouldSkip = false;
-            this.reasonToApply = null;
             this.modifiersToApply = modifiersToApply;
         }
 
         private TestApplicator(
                 final TestDef testDef,
                 @NonNull
-                final String reason) {
+                final String skipReason) {
             this.testDef = testDef;
-            this.shouldSkip = true;
-            this.reasonToApply = reason;
-            this.modifiersToApply = new ArrayList<>();
+            this.modifiersToApply = Arrays.asList(Modifier.SKIP);
         }
 
         private TestApplicator onMatch(final boolean match) {
@@ -392,12 +391,8 @@ public final class UnifiedTestModifications {
             if (precondition != null && !precondition.get()) {
                 return this;
             }
-            if (shouldSkip) {
-                assumeFalse(match, reasonToApply);
-            } else {
-                if (match) {
-                    this.testDef.modifiers.addAll(this.modifiersToApply);
-                }
+            if (match) {
+                this.testDef.modifiers.addAll(this.modifiersToApply);
             }
             return this;
         }
@@ -510,5 +505,17 @@ public final class UnifiedTestModifications {
          * Reactive only.
          */
         WAIT_FOR_BATCH_CURSOR_CREATION,
+        /**
+         * Skip the test.
+         */
+        SKIP,
+        /**
+         * Retry the test on failure.
+         */
+        RETRY,
+        /**
+         * Retry the test multiple times, without ignoring failures.
+         */
+        FORCE_FLAKY,
     }
 }
