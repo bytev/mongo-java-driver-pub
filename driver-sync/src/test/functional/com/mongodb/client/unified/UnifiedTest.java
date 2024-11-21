@@ -216,7 +216,11 @@ public abstract class UnifiedTest {
         ignoreExtraEvents = false;
         testDef = testDef(directoryName, fileDescription, testDescription, isReactive());
         UnifiedTestModifications.doSkips(testDef);
+
+        boolean skip = testDef.wasAssignedModifier(UnifiedTestModifications.Modifier.SKIP);
+        assumeFalse(skip, "Skipping test");
         skips(fileDescription, testDescription);
+
         assertTrue(
                 schemaVersion.equals("1.0")
                         || schemaVersion.equals("1.1")
